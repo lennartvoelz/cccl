@@ -27,13 +27,35 @@
 #include <cuda/std/__bit/popcount.h>
 #include <cuda/std/__type_traits/is_default_constructible.h>
 #include <cuda/std/__type_traits/is_same.h>
+#include <cuda/std/__type_traits/remove_cvref.h>
 #include <cuda/std/__type_traits/void_t.h>
+#include <cuda/std/__utility/declval.h>
 #include <cuda/std/__utility/swap.h>
 
 CUB_NAMESPACE_BEGIN
 
 namespace detail
 {
+// Type trait to detect if the passed functor has min and max members
+template <typename CompareOp, typename KeyT, typename = void>
+inline constexpr bool is_min_max_op_v = false;
+
+// TODO: simplify and make more readable
+template <typename CompareOp, typename KeyT>
+inline constexpr bool is_min_max_op_v<
+  CompareOp,
+  KeyT,
+  ::cuda::std::void_t<decltype(::cuda::std::declval<CompareOp&>().min(
+                        ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>())),
+                      decltype(::cuda::std::declval<CompareOp&>().max(
+                        ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>> =
+  ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype(::cuda::std::declval<CompareOp&>().min(
+                           ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>,
+                         KeyT>
+  && ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype(::cuda::std::declval<CompareOp&>().max(
+                              ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>,
+                            KeyT>;
+
 //! @rst
 //! The WarpBitonicSort class provides methods for sorting items partitioned across a CUDA warp
 //! using a bitonic sorting network.
@@ -343,18 +365,40 @@ private:
     _CCCL_PRAGMA_UNROLL_FULL()
     for (int i = 0; i < second_half_len; ++i)
     {
-      const int other_i      = i + first_half_len;
-      KeyT& key              = keys[i];
-      KeyT& other_key        = keys[other_i];
-      const bool should_swap = (Reverse) ? compare_op(key, other_key) : compare_op(other_key, key);
+      const int other_i = i + first_half_len;
+      KeyT& key         = keys[i];
+      KeyT& other_key   = keys[other_i];
 
-      if (should_swap)
+      if constexpr (is_min_max_op_v<CompareOp, KeyT>)
       {
-        using ::cuda::std::swap;
-        swap(key, other_key);
-        if constexpr (!keys_only)
+        static_assert(keys_only, "Min/Max operators support keys-sort only");
+
+        const KeyT max_key = compare_op.max(key, other_key);
+        const KeyT min_key = compare_op.min(key, other_key);
+
+        if constexpr (Reverse)
         {
-          swap(values[i], values[other_i]);
+          key       = max_key;
+          other_key = min_key;
+        }
+        else
+        {
+          key       = min_key;
+          other_key = max_key;
+        }
+      }
+      else
+      {
+        const bool should_swap = (Reverse) ? compare_op(key, other_key) : compare_op(other_key, key);
+
+        if (should_swap)
+        {
+          using ::cuda::std::swap;
+          swap(key, other_key);
+          if constexpr (!keys_only)
+          {
+            swap(values[i], values[other_i]);
+          }
         }
       }
     }
