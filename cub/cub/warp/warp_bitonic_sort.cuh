@@ -36,7 +36,10 @@ CUB_NAMESPACE_BEGIN
 
 namespace detail
 {
-// Type trait to detect if the passed functor has min and max members
+// Type trait to detect if the passed functor has min and max members that return KeyT. Such an operator replaces the
+// comparator in keys-only sorts and must keep the keys a permutation: for every pair of keys a and b,
+// {min(a, b), max(a, b)} must equal {a, b}, with min(a, b) ordered before or equivalent to max(a, b) under one strict
+// weak order for all pairs
 template <typename CompareOp, typename KeyT, typename = void>
 inline constexpr bool is_min_max_op_v = false;
 
@@ -156,6 +159,9 @@ public:
   //! - Sort is not guaranteed to be stable. That is, suppose that `i` and `j` are equivalent: neither one is less than
   //!   the other. It is not guaranteed that the relative order of these two elements will be preserved by sort.
   //! - All threads in the calling logical warp must invoke this collective.
+  //! - `compare_op` can also be a min/max operator with `min(a, b)` and `max(a, b)` members that return `KeyT`. For
+  //!   every pair of keys, `{min(a, b), max(a, b)}` must be a permutation of `{a, b}`, ordered consistently for all
+  //!   pairs. `cuda::std::fmin` and `cuda::std::fmax` meet this only for keys without NaN.
   //!
   //! @tparam CompareOp Comparison functor type
   //!
