@@ -51,14 +51,13 @@ template <bool Unroll, int ItemsPerThread>
 inline constexpr int sort_unroll_count = Unroll ? (::cuda::std::numeric_limits<int>::max)() : 1;
 #endif // ^^^ other compilers ^^^
 
-template <typename KeyT, typename ValueT, typename CompareOp>
+// Uses the min and max members of compare_op if AllowMinMax is set and only keys are sorted, otherwise operator()
+template <bool AllowMinMax, typename KeyT, typename ValueT, typename CompareOp>
 _CCCL_DEVICE_API _CCCL_FORCEINLINE void
 compare_swap(KeyT& key_lhs, KeyT& key_rhs, ValueT& item_lhs, ValueT& item_rhs, CompareOp compare_op)
 {
-  if constexpr (is_min_max_op_v<CompareOp, KeyT>)
+  if constexpr (AllowMinMax && is_min_max_op_v<CompareOp, KeyT> && ::cuda::std::is_same_v<ValueT, NullType>)
   {
-    static_assert(::cuda::std::is_same_v<ValueT, NullType>, "Min/Max operators support keys-sort only");
-
     const KeyT min_key = (compare_op.min)(key_lhs, key_rhs);
     key_rhs            = (compare_op.max)(key_lhs, key_rhs);
     key_lhs            = min_key;
@@ -78,9 +77,6 @@ template <bool Unroll = sort_unroll_default, typename KeyT, typename ValueT, typ
 _CCCL_DEVICE_API _CCCL_FORCEINLINE void
 stable_odd_even_sort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThread], CompareOp compare_op)
 {
-  // min/max may exchange equivalent keys, e.g. -0.0 and +0.0
-  static_assert(!is_min_max_op_v<CompareOp, KeyT>, "Min/Max operators are not supported by the stable sort");
-
   constexpr int unroll = sort_unroll_count<Unroll, ItemsPerThread>;
   _CCCL_PRAGMA_UNROLL(unroll)
   for (int i = 0; i < ItemsPerThread; ++i)
@@ -88,7 +84,7 @@ stable_odd_even_sort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThrea
     _CCCL_PRAGMA_UNROLL(unroll)
     for (int j = i % 2; j < ItemsPerThread - 1; j += 2)
     {
-      _CUB::detail::compare_swap(keys[j], keys[j + 1], items[j], items[j + 1], compare_op);
+      _CUB::detail::compare_swap<false>(keys[j], keys[j + 1], items[j], items[j + 1], compare_op);
     } // inner loop
   } // outer loop
 }
@@ -110,7 +106,7 @@ unstable_pairwise_sort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThr
       for (int lhs = group_offset; lhs < ItemsPerThread - group_size; lhs += 2 * group_size)
       {
         const int rhs = lhs + group_size;
-        _CUB::detail::compare_swap(keys[lhs], keys[rhs], items[lhs], items[rhs], compare_op);
+        _CUB::detail::compare_swap<true>(keys[lhs], keys[rhs], items[lhs], items[rhs], compare_op);
       }
     }
   }
@@ -134,7 +130,7 @@ unstable_pairwise_sort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThr
           const int rhs = lhs + stride;
           if (rhs < ItemsPerThread)
           {
-            _CUB::detail::compare_swap(keys[lhs], keys[rhs], items[lhs], items[rhs], compare_op);
+            _CUB::detail::compare_swap<true>(keys[lhs], keys[rhs], items[lhs], items[rhs], compare_op);
           }
         }
       }
@@ -157,7 +153,8 @@ unstable_pairwise_sort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThr
  *   Value type. If `cub::NullType` is used as `ValueT`, only keys are sorted.
  *
  * @tparam CompareOp
- *   functor type having member `bool operator()(KeyT lhs, KeyT rhs)`
+ *   functor type having member `bool operator()(KeyT lhs, KeyT rhs)`. Members `min` and `max` are ignored, since they
+ *   may exchange equivalent keys, e.g. -0.0 and +0.0
  *
  * @tparam ItemsPerThread
  *   The number of items per thread
@@ -190,9 +187,11 @@ StableOddEvenSort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThread],
 //! @tparam KeyT Key type.
 //! @tparam ValueT Value type. If @c cub::NullType is used, only keys are sorted.
 //! @tparam CompareOp Comparison function object that provides a strict weak ordering. For keys-only sorts, it can
-//!         also be a min/max operator with `min(a, b)` and `max(a, b)` members that return `KeyT`. For every pair of
-//!         keys, `{min(a, b), max(a, b)}` must be a permutation of `{a, b}`, ordered consistently for all pairs.
-//!         `cuda::std::fmin` and `cuda::std::fmax` meet this only for keys without NaN.
+//!         also be a min/max operator with `min(a, b)` and `max(a, b)` members that return `KeyT`, which are then
+//!         used instead of `operator()`. For every pair of keys a and b, `{min(a, b), max(a, b)}` must equal `{a, b}`,
+//!         with `min(a, b)` ordered before or equivalent to `max(a, b)` under one strict weak order for all pairs.
+//!         `cuda::std::fmin` and `cuda::std::fmax` meet this only for keys without NaN. Sorts with values always use
+//!         `operator()`.
 //! @tparam ItemsPerThread Number of items per thread.
 //!
 //! @param[in,out] keys Keys to sort.

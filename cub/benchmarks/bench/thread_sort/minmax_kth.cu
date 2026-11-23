@@ -31,6 +31,11 @@ struct less_op
   {
     return lhs < rhs;
   }
+
+  __device__ __forceinline__ bool operator()(__half lhs, __half rhs) const
+  {
+    return __hlt(lhs, rhs);
+  }
 };
 
 // Only valid for keys without NaN
@@ -140,7 +145,15 @@ KeyT random_key(std::mt19937& rng)
   else
   {
     std::uniform_int_distribution<int> dist(-20, 20);
-    return static_cast<KeyT>(dist(rng));
+    const auto key = static_cast<float>(dist(rng));
+    if constexpr (std::is_same_v<KeyT, __half>)
+    {
+      return __float2half(key);
+    }
+    else
+    {
+      return static_cast<KeyT>(key);
+    }
   }
 }
 

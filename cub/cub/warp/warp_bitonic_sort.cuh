@@ -141,8 +141,9 @@ public:
   //!   the other. It is not guaranteed that the relative order of these two elements will be preserved by sort.
   //! - All threads in the calling logical warp must invoke this collective.
   //! - `compare_op` can also be a min/max operator with `min(a, b)` and `max(a, b)` members that return `KeyT`. For
-  //!   every pair of keys, `{min(a, b), max(a, b)}` must be a permutation of `{a, b}`, ordered consistently for all
-  //!   pairs. `cuda::std::fmin` and `cuda::std::fmax` meet this only for keys without NaN.
+  //!   every pair of keys a and b, `{min(a, b), max(a, b)}` must equal `{a, b}`, with `min(a, b)` ordered before or
+  //!   equivalent to `max(a, b)` under one strict weak order for all pairs. `cuda::std::fmin` and `cuda::std::fmax`
+  //!   meet this only for keys without NaN.
   //!
   //! @tparam CompareOp Comparison functor type
   //!
