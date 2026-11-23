@@ -13,6 +13,7 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cub/detail/min_max_op.cuh>
 #include <cub/detail/null_type.cuh>
 
 #include <cuda/__cmath/ilog.h>
@@ -28,7 +29,15 @@ template <typename KeyT, typename ValueT, typename CompareOp>
 _CCCL_DEVICE_API _CCCL_FORCEINLINE void
 compare_swap(KeyT& key_lhs, KeyT& key_rhs, ValueT& item_lhs, ValueT& item_rhs, CompareOp compare_op)
 {
-  if (compare_op(key_rhs, key_lhs))
+  if constexpr (is_min_max_op_v<CompareOp, KeyT>)
+  {
+    static_assert(::cuda::std::is_same_v<ValueT, NullType>, "Min/Max operators support keys-sort only");
+
+    const KeyT min_key = compare_op.min(key_lhs, key_rhs);
+    key_rhs            = compare_op.max(key_lhs, key_rhs);
+    key_lhs            = min_key;
+  }
+  else if (compare_op(key_rhs, key_lhs))
   {
     using ::cuda::std::swap;
     swap(key_lhs, key_rhs);
@@ -43,6 +52,9 @@ template <bool Unroll = true, typename KeyT, typename ValueT, typename CompareOp
 _CCCL_DEVICE_API _CCCL_FORCEINLINE void
 stable_odd_even_sort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThread], CompareOp compare_op)
 {
+  // min/max may exchange equivalent keys, e.g. -0.0 and +0.0
+  static_assert(!is_min_max_op_v<CompareOp, KeyT>, "Min/Max operators are not supported by the stable sort");
+
   constexpr int unroll = Unroll ? ItemsPerThread : 1;
   _CCCL_PRAGMA_UNROLL(unroll)
   for (int i = 0; i < ItemsPerThread; ++i)
@@ -151,7 +163,10 @@ StableOddEvenSort(KeyT (&keys)[ItemsPerThread], ValueT (&items)[ItemsPerThread],
 //!
 //! @tparam KeyT Key type.
 //! @tparam ValueT Value type. If @c cub::NullType is used, only keys are sorted.
-//! @tparam CompareOp Comparison function object that provides a strict weak ordering.
+//! @tparam CompareOp Comparison function object that provides a strict weak ordering. For keys-only sorts, it can
+//!         also be a min/max operator with `min(a, b)` and `max(a, b)` members that return `KeyT`. For every pair of
+//!         keys, `{min(a, b), max(a, b)}` must be a permutation of `{a, b}`, ordered consistently for all pairs.
+//!         `cuda::std::fmin` and `cuda::std::fmax` meet this only for keys without NaN.
 //! @tparam ItemsPerThread Number of items per thread.
 //!
 //! @param[in,out] keys Keys to sort.

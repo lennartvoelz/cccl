@@ -5,6 +5,7 @@
 
 #include <thrust/memory.h>
 
+#include <cuda/functional>
 #include <cuda/std/bit>
 #include <cuda/std/type_traits>
 
@@ -18,6 +19,7 @@
 #include <cuda_runtime_api.h>
 
 #include "cub_test_macros.h"
+#include <c2h/extended_types.h>
 #include <c2h/generators.h>
 #include <c2h/vector.h>
 
@@ -213,6 +215,150 @@ CUB_TEST(
       pair_vector_t<key_t, value_t> expected(expected_begin, expected_begin + items_per_thread);
       std::stable_sort(expected.begin(), expected.end(), pair_less);
       REQUIRE(std::equal(expected.begin(), expected.end(), actual_begin));
+    }
+  }
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+// min/max operator tests
+
+struct min_max_op
+{
+  template <typename T>
+  __device__ T min(T lhs, T rhs) const
+  {
+    return cuda::minimum<T>{}(lhs, rhs);
+  }
+
+  template <typename T>
+  __device__ T max(T lhs, T rhs) const
+  {
+    return cuda::maximum<T>{}(lhs, rhs);
+  }
+
+#if TEST_HALF_T()
+  // Per-component min/max: each thread sorts two independent arrays, one per component
+  __device__ __half2 min(__half2 lhs, __half2 rhs) const
+  {
+    return __hmin2(lhs, rhs);
+  }
+
+  __device__ __half2 max(__half2 lhs, __half2 rhs) const
+  {
+    return __hmax2(lhs, rhs);
+  }
+#endif // TEST_HALF_T()
+};
+
+static_assert(cub::detail::is_min_max_op_v<min_max_op, float>);
+static_assert(!cub::detail::is_min_max_op_v<popcount_less, uint32_t>);
+
+// Number of independent arrays that one key holds
+template <typename KeyT>
+inline constexpr int lanes_v = 1;
+
+#if TEST_HALF_T()
+template <>
+inline constexpr int lanes_v<__half2> = 2;
+#endif // TEST_HALF_T()
+
+template <typename KeyT>
+__device__ KeyT make_key(const int* lane_values)
+{
+#if TEST_HALF_T()
+  if constexpr (cuda::std::is_same_v<KeyT, __half2>)
+  {
+    return __halves2half2(__int2half_rn(lane_values[0]), __int2half_rn(lane_values[1]));
+  }
+  else
+#endif // TEST_HALF_T()
+  {
+    return static_cast<KeyT>(lane_values[0]);
+  }
+}
+
+template <typename KeyT>
+__device__ void store_key(KeyT key, float* lane_values)
+{
+#if TEST_HALF_T()
+  if constexpr (cuda::std::is_same_v<KeyT, __half2>)
+  {
+    lane_values[0] = __low2float(key);
+    lane_values[1] = __high2float(key);
+  }
+  else
+#endif // TEST_HALF_T()
+  {
+    lane_values[0] = static_cast<float>(key);
+  }
+}
+
+// Input is laid out as [thread][item][lane]
+template <typename KeyT, int ItemsPerThread>
+__global__ void sort_min_max_kernel(const int* keys_in, float* keys_out)
+{
+  constexpr int lanes     = lanes_v<KeyT>;
+  const int thread_offset = ItemsPerThread * lanes * static_cast<int>(threadIdx.x);
+  KeyT keys[ItemsPerThread];
+  cub::NullType values[ItemsPerThread];
+
+  for (int item = 0; item < ItemsPerThread; ++item)
+  {
+    keys[item] = make_key<KeyT>(keys_in + thread_offset + item * lanes);
+  }
+  cub::UnstablePairwiseSort(keys, values, min_max_op{});
+
+  for (int item = 0; item < ItemsPerThread; ++item)
+  {
+    store_key(keys[item], keys_out + thread_offset + item * lanes);
+  }
+}
+
+#if TEST_HALF_T()
+using min_max_key_types = c2h::type_list<int32_t, float, __half, __half2>;
+#else // ^^^ TEST_HALF_T() ^^^ / vvv !TEST_HALF_T() vvv
+using min_max_key_types = c2h::type_list<int32_t, float>;
+#endif // !TEST_HALF_T()
+
+CUB_TEST("Unstable thread sort works with min/max operators",
+         "[sort][thread]",
+         CUB_SMALL,
+         min_max_key_types,
+         items_per_thread_list)
+{
+  using key_t                    = c2h::get<0, TestType>;
+  constexpr int items_per_thread = c2h::get<1, TestType>::value;
+  constexpr int lanes            = lanes_v<key_t>;
+  constexpr int threads          = 128;
+  constexpr int num_items        = threads * items_per_thread * lanes;
+
+  // Small range for many duplicates; exactly representable in every key type
+  c2h::device_vector<int> keys_in(num_items);
+  c2h::device_vector<float> keys_out(num_items);
+  c2h::gen(C2H_SEED(3), keys_in, -20, 20);
+
+  sort_min_max_kernel<key_t, items_per_thread>
+    <<<1, threads>>>(thrust::raw_pointer_cast(keys_in.data()), thrust::raw_pointer_cast(keys_out.data()));
+  REQUIRE(cudaSuccess == cudaPeekAtLastError());
+  REQUIRE(cudaSuccess == cudaDeviceSynchronize());
+
+  const c2h::host_vector<int> input    = keys_in;
+  const c2h::host_vector<float> actual = keys_out;
+
+  for (int thread = 0; thread < threads; ++thread)
+  {
+    for (int lane = 0; lane < lanes; ++lane)
+    {
+      std::vector<float> expected(items_per_thread);
+      std::vector<float> actual_lane(items_per_thread);
+      for (int item = 0; item < items_per_thread; ++item)
+      {
+        const int index   = (thread * items_per_thread + item) * lanes + lane;
+        expected[item]    = static_cast<float>(input[index]);
+        actual_lane[item] = actual[index];
+      }
+      std::sort(expected.begin(), expected.end());
+      REQUIRE(expected == actual_lane);
     }
   }
 }

@@ -13,6 +13,7 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cub/detail/min_max_op.cuh>
 #include <cub/detail/null_type.cuh>
 #include <cub/detail/uninitialized.cuh>
 #include <cub/util_arch.cuh>
@@ -27,38 +28,13 @@
 #include <cuda/std/__bit/popcount.h>
 #include <cuda/std/__type_traits/is_default_constructible.h>
 #include <cuda/std/__type_traits/is_same.h>
-#include <cuda/std/__type_traits/remove_cvref.h>
 #include <cuda/std/__type_traits/void_t.h>
-#include <cuda/std/__utility/declval.h>
 #include <cuda/std/__utility/swap.h>
 
 CUB_NAMESPACE_BEGIN
 
 namespace detail
 {
-// Type trait to detect if the passed functor has min and max members that return KeyT. Such an operator replaces the
-// comparator in keys-only sorts and must keep the keys a permutation: for every pair of keys a and b,
-// {min(a, b), max(a, b)} must equal {a, b}, with min(a, b) ordered before or equivalent to max(a, b) under one strict
-// weak order for all pairs
-template <typename CompareOp, typename KeyT, typename = void>
-inline constexpr bool is_min_max_op_v = false;
-
-// TODO: simplify and make more readable
-template <typename CompareOp, typename KeyT>
-inline constexpr bool is_min_max_op_v<
-  CompareOp,
-  KeyT,
-  ::cuda::std::void_t<decltype(::cuda::std::declval<CompareOp&>().min(
-                        ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>())),
-                      decltype(::cuda::std::declval<CompareOp&>().max(
-                        ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>> =
-  ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype(::cuda::std::declval<CompareOp&>().min(
-                           ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>,
-                         KeyT>
-  && ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype(::cuda::std::declval<CompareOp&>().max(
-                              ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>,
-                            KeyT>;
-
 //! @rst
 //! The WarpBitonicSort class provides methods for sorting items partitioned across a CUDA warp
 //! using a bitonic sorting network.
