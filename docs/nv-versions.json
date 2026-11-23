@@ -1,0 +1,9 @@
+[
+  {
+    "name": "unstable",
+    "version": "unstable",
+    "url": "https://lennartvoelz.github.io/cccl/unstable/",
+    "latest": true,
+    "preferred": true
+  }
+]
