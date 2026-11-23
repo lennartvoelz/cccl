@@ -19,7 +19,7 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -27,12 +27,40 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cuda/std/__cstddef/types.h>
+#include <cuda/std/__exception/exception_macros.h>
+#include <cuda/std/__host_stdlib/cstdio>
+#include <cuda/std/__host_stdlib/exception>
+#include <cuda/std/__host_stdlib/memory>
+#include <cuda/std/__host_stdlib/mutex>
+#include <cuda/std/source_location>
+
+#include <cuda/experimental/__stf/graph/internal/event_types.cuh>
+#include <cuda/experimental/__stf/internal/async_prereq.cuh>
+#include <cuda/experimental/__stf/internal/async_resources_handle.cuh>
+#include <cuda/experimental/__stf/internal/constants.cuh>
+#include <cuda/experimental/__stf/internal/data_interface.cuh>
+#include <cuda/experimental/__stf/internal/exec_affinity.cuh>
+#include <cuda/experimental/__stf/internal/task_dep.cuh>
+#include <cuda/experimental/__stf/internal/void_interface.cuh>
+#include <cuda/experimental/__stf/utility/core.cuh>
+#include <cuda/experimental/__stf/utility/cuda_safe_call.cuh>
+
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
+#include <functional>
 #include <iostream>
+#include <map>
 #include <shared_mutex>
 #include <stack>
+#include <stdexcept>
+#include <string>
 #include <thread>
+#include <tuple>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "cuda/experimental/__stf/allocators/adapters.cuh"
 #include "cuda/experimental/__stf/internal/context.cuh"
@@ -212,23 +240,34 @@ public:
             combine_access_mode(combined_modes, info.logical_data_id, info.mode);
           }
 
-          // 2. Validate and auto-push with combined modes
-          if constexpr (sizeof...(initial_args) > 0)
-          {
-            auto validate = [&](const auto& arg) {
-              arg.get_d().validate_access(
-                offset_, sctx_, lookup_combined_mode(combined_modes, arg.get_d().get_unique_id()), arg.get_dplace());
-            };
-            (validate(initial_args), ...);
-          }
-
-          for (const auto& info : additional_deps_)
-          {
-            info.validate_access_op(sctx_, offset_, lookup_combined_mode(combined_modes, info.logical_data_id));
-          }
-
-          // 3. Resolve initial deps and create the task
           auto task = [&]() {
+            // Hold the context-tree shared lock across validation, auto-push and
+            // task creation, as parallel_for()/launch()/cuda_kernel()/host_launch()
+            // do. task() itself only holds it while reading the head offset, so
+            // without this lock a concurrent push() on another thread may grow the
+            // node vector and invalidate the node references taken by push_at(),
+            // and a concurrent pop() may release a shared freeze that push_at() is
+            // reusing. The lock is released before the task body runs, like the
+            // other entry points, which return their scope object before the body
+            // is applied.
+            auto tree_lock = sctx_.pimpl->acquire_shared_lock();
+
+            // 2. Validate and auto-push with combined modes
+            if constexpr (sizeof...(initial_args) > 0)
+            {
+              auto validate = [&](const auto& arg) {
+                arg.get_d().validate_access(
+                  offset_, sctx_, lookup_combined_mode(combined_modes, arg.get_d().get_unique_id()), arg.get_dplace());
+              };
+              (validate(initial_args), ...);
+            }
+
+            for (const auto& info : additional_deps_)
+            {
+              info.validate_access_op(sctx_, offset_, lookup_combined_mode(combined_modes, info.logical_data_id));
+            }
+
+            // 3. Resolve initial deps and create the task
             auto& ctx = sctx_.get_ctx(offset_);
 
             auto task_deps = ::std::apply(
@@ -237,18 +276,20 @@ public:
               },
               task_deps_tuple_);
 
-            return ::std::apply(
+            auto new_task = ::std::apply(
               [&ctx, exec_place = exec_place_](auto&&... deps) {
                 return ctx.task(exec_place, deps...);
               },
               task_deps);
-          }();
 
-          // 4. Resolve and add additional deps from add_deps calls
-          for (const auto& info : additional_deps_)
-          {
-            task.add_deps(info.resolve_op(offset_, lookup_combined_mode(combined_modes, info.logical_data_id)));
-          }
+            // 4. Resolve and add additional deps from add_deps calls
+            for (const auto& info : additional_deps_)
+            {
+              new_task.add_deps(info.resolve_op(offset_, lookup_combined_mode(combined_modes, info.logical_data_id)));
+            }
+
+            return new_task;
+          }();
 
           if (symbol_.has_value())
           {
@@ -1220,7 +1261,7 @@ public:
       _pop_epilogue(finalize_prereqs, err);
       if (err)
       {
-        on_throw(policy) << [&] {
+        sump::sink(policy)->*[&] {
           ::std::rethrow_exception(err);
         };
       }
@@ -1319,7 +1360,7 @@ public:
       pending_epilogue_node_offset_ = -1;
       if (err)
       {
-        on_throw(policy) << [&] {
+        sump::sink(policy)->*[&] {
           ::std::rethrow_exception(err);
         };
       }
@@ -1442,8 +1483,7 @@ public:
       auto it = head_map.find(::std::this_thread::get_id());
       if (it == head_map.end())
       {
-        fprintf(stderr, "Error: context offset isn't set in this thread\n");
-        abort();
+        _CCCL_THROW(::std::logic_error, "the calling thread has no active stackable context (no head offset is set)");
       }
       return it->second;
     }
@@ -1678,10 +1718,10 @@ public:
   //! function most worth catching around.
   //!
   //! `policy` decides what happens to that first failure once the level is gone: the default,
-  //! `rethrow`, propagates it with its type intact; `abort` reports and ends the program, which
+  //! `fwd`, propagates it with its type intact; `abort` reports and ends the program, which
   //! is what the RAII scopes pass since they call pop() from a destructor; `notify` reports and
   //! lets the program continue. See exception_policy.cuh for the full set.
-  template <typename Policy = exception_policies::rethrow_t>
+  template <typename Policy = sump::fwd_t>
   void pop(Policy policy = {})
   {
     pimpl->pop(policy);
@@ -1711,7 +1751,7 @@ public:
   //! context, and destroys the node. Invalidates every launchable_graph_handle
   //! that was produced by the matching pop_prologue(). Completes even if a step
   //! fails, then hands the first failure to `policy`; see the contract on pop().
-  template <typename Policy = exception_policies::rethrow_t>
+  template <typename Policy = sump::fwd_t>
   void pop_epilogue(Policy policy = {})
   {
     pimpl->pop_epilogue_impl(policy);
@@ -1933,8 +1973,7 @@ public:
     int offset = get_head_offset();
     if (offset != get_root_offset())
     {
-      fprintf(stderr, "Error: fence() not supported in nested contexts.\n");
-      abort();
+      _CCCL_THROW(::std::logic_error, "fence() is not supported in nested contexts");
     }
 
     return get_ctx(offset).fence();
@@ -1948,8 +1987,7 @@ public:
     int offset = get_head_offset();
     if (offset != get_root_offset())
     {
-      fprintf(stderr, "Error: wait() not supported in nested contexts.\n");
-      abort();
+      _CCCL_THROW(::std::logic_error, "wait() is not supported in nested contexts");
     }
 
     // get_ld() returns a logical_data handle by value (a copy), so bind it to a

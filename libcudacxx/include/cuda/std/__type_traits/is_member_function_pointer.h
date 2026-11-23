@@ -12,7 +12,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -25,6 +25,10 @@
 #include <cuda/std/__type_traits/remove_cv.h> // IWYU pragma: keep
 
 #include <cuda/std/__cccl/prologue.h>
+
+#if _CCCL_HAS_BUILTIN(__is_member_function_pointer)
+#  define _CCCL_BUILTIN_IS_MEMBER_FUNCTION_POINTER(...) __is_member_function_pointer(__VA_ARGS__)
+#endif // _CCCL_HAS_BUILTIN(__is_member_function_pointer)
 
 _CCCL_BEGIN_NAMESPACE_CUDA_STD
 
@@ -47,7 +51,7 @@ struct __cccl_is_member_pointer<_Tp _Up::*>
 
 template <class _Tp>
 struct _CCCL_TYPE_VISIBILITY_DEFAULT
-is_member_function_pointer : public integral_constant<bool, _CCCL_BUILTIN_IS_MEMBER_FUNCTION_POINTER(_Tp)>
+is_member_function_pointer : public bool_constant<_CCCL_BUILTIN_IS_MEMBER_FUNCTION_POINTER(_Tp)>
 {};
 
 template <class _Tp>

@@ -5,7 +5,7 @@
 
 #include <cub/config.cuh>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -34,14 +34,14 @@ template <typename CompareOp, typename KeyT>
 inline constexpr bool is_min_max_op_v<
   CompareOp,
   KeyT,
-  ::cuda::std::void_t<decltype(::cuda::std::declval<CompareOp&>().min(
+  ::cuda::std::void_t<decltype((::cuda::std::declval<CompareOp&>().min)(
                         ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>())),
-                      decltype(::cuda::std::declval<CompareOp&>().max(
+                      decltype((::cuda::std::declval<CompareOp&>().max)(
                         ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>> =
-  ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype(::cuda::std::declval<CompareOp&>().min(
+  ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype((::cuda::std::declval<CompareOp&>().min)(
                            ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>,
                          KeyT>
-  && ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype(::cuda::std::declval<CompareOp&>().max(
+  && ::cuda::std::is_same_v<::cuda::std::remove_cvref_t<decltype((::cuda::std::declval<CompareOp&>().max)(
                               ::cuda::std::declval<const KeyT&>(), ::cuda::std::declval<const KeyT&>()))>,
                             KeyT>;
 } // namespace detail

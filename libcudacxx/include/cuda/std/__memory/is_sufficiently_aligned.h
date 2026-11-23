@@ -14,7 +14,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -33,7 +33,7 @@ _CCCL_BEGIN_NAMESPACE_CUDA_STD
 template <size_t _ByteAlignment, class _ElementType>
 [[nodiscard]] _CCCL_API bool is_sufficiently_aligned(_ElementType* __ptr) noexcept
 {
-  static_assert(::cuda::__is_valid_alignment<_ElementType>(_ByteAlignment), "invalid _ByteAlignment for _ElementType");
+  static_assert(::cuda::__is_valid_alignment(_ByteAlignment), "invalid _ByteAlignment");
   return ::cuda::is_aligned(__ptr, _ByteAlignment);
 }
 

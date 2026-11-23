@@ -12,7 +12,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -121,11 +121,11 @@ inline constexpr bool __nothrow_swappable_with<_Tp, _Up, false> = false;
 } // namespace __detail
 
 template <class _Tp>
-struct __is_swappable : public integral_constant<bool, __detail::__swappable_with<_Tp&>>
+struct __is_swappable : public bool_constant<__detail::__swappable_with<_Tp&>>
 {};
 
 template <class _Tp>
-struct __is_nothrow_swappable : public integral_constant<bool, __detail::__nothrow_swappable_with<_Tp&>>
+struct __is_nothrow_swappable : public bool_constant<__detail::__nothrow_swappable_with<_Tp&>>
 {};
 
 template <class _Tp, class _Up>

@@ -21,7 +21,7 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -29,17 +29,26 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cuda/std/__cstddef/types.h>
+
 #include <cuda/experimental/__stf/internal/backend_ctx.cuh>
 #include <cuda/experimental/__stf/internal/ctx_resource.cuh>
+#include <cuda/experimental/__stf/internal/exec_affinity.cuh>
+#include <cuda/experimental/__stf/internal/instance_id.cuh>
 #include <cuda/experimental/__stf/internal/logical_data.cuh>
 #include <cuda/experimental/__stf/internal/task_dep.cuh>
 #include <cuda/experimental/__stf/internal/task_statistics.cuh>
 #include <cuda/experimental/__stf/internal/thread_hierarchy.cuh>
 #include <cuda/experimental/__stf/internal/void_interface.cuh>
+#include <cuda/experimental/__stf/utility/core.cuh>
+#include <cuda/experimental/__stf/utility/cuda_safe_call.cuh>
 #include <cuda/experimental/__stf/utility/exception_policy.cuh>
 
 #include <memory>
+#include <string>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace cuda::experimental::stf
 {
@@ -258,23 +267,7 @@ public:
       {
         if (start_event && end_event)
         {
-          // Inside the noexcept SCOPE body; keep cuda_safe_call so a CUDA
-          // error aborts rather than throwing through the guard.
-          cuda_safe_call(cudaEventRecord(end_event, t.get_stream()));
-          cuda_safe_call(cudaEventSynchronize(end_event));
-
-          float milliseconds = 0;
-          cuda_safe_call(cudaEventElapsedTime(&milliseconds, start_event, end_event));
-
-          if (dot.is_tracing())
-          {
-            dot.template add_vertex_timing<typename Ctx::task_type>(t, milliseconds, -1);
-          }
-
-          if (statistics.is_calibrating())
-          {
-            statistics.log_task_time(t, milliseconds);
-          }
+          statistics.record_task_timing(t, start_event, end_event, t.get_stream(), dot);
         }
       }
       t.clear();

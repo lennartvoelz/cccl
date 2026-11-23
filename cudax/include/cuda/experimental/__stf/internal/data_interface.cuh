@@ -19,7 +19,7 @@
 #include <cuda/__cccl_config>
 #include <cuda/std/optional>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -27,16 +27,26 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cuda/std/__cstddef/types.h>
+#include <cuda/std/__exception/exception_macros.h>
 #include <cuda/std/type_traits>
 
 #include <cuda/experimental/__stf/allocators/block_allocator.cuh>
+#include <cuda/experimental/__stf/internal/async_prereq.cuh>
+#include <cuda/experimental/__stf/internal/constants.cuh>
+#include <cuda/experimental/__stf/internal/exec_affinity.cuh>
+#include <cuda/experimental/__stf/internal/instance_id.cuh>
 #include <cuda/experimental/__stf/internal/msir.cuh>
 #include <cuda/experimental/__stf/internal/slice.cuh>
+#include <cuda/experimental/__stf/internal/stf_places_into_stf_core.cuh>
 #include <cuda/experimental/__stf/internal/task.cuh>
 #include <cuda/experimental/__stf/utility/hash.cuh>
 
 #include <deque>
-#include <optional>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <typeinfo>
 
 namespace cuda::experimental::stf
 {
@@ -428,13 +438,9 @@ private:
   {
     if (typeid(shape_t) != asked_ti)
     {
-      fprintf(stderr,
-              "Shape type mismatch.\nAssumed: %.*s\nActual:  %.*s\n",
-              static_cast<int>(type_name<shape_t>.size()),
-              type_name<shape_t>.data(),
-              static_cast<int>(tname.size()),
-              tname.data());
-      abort();
+      _CCCL_THROW(
+        ::std::invalid_argument,
+        ::std::string("shape type mismatch: assumed ").append(type_name<shape_t>).append(", actual ").append(tname));
     }
     return &shape;
   }
@@ -444,13 +450,9 @@ private:
     // We pass types where we removed const qualifiers in instance()
     if (ti != typeid(rw_type_of<T>) && ti != typeid(void))
     {
-      fprintf(stderr,
-              "Data interface type mismatch.\nAssumed: %.*s\nActual:  %.*s\n",
-              static_cast<int>(type_name<T>.size()),
-              type_name<T>.data(),
-              static_cast<int>(tname.size()),
-              tname.data());
-      abort();
+      _CCCL_THROW(
+        ::std::invalid_argument,
+        ::std::string("data interface type mismatch: assumed ").append(type_name<T>).append(", actual ").append(tname));
     }
     return &instance(instance_id);
   }
@@ -461,13 +463,9 @@ private:
     // We pass types where we removed const qualifiers in instance()
     if (ti != typeid(rw_type_of<T>) && ti != typeid(void))
     {
-      fprintf(stderr,
-              "Data interface type mismatch.\nAssumed: %.*s\nActual:  %.*s\n",
-              static_cast<int>(type_name<T>.size()),
-              type_name<T>.data(),
-              static_cast<int>(tname.size()),
-              tname.data());
-      abort();
+      _CCCL_THROW(
+        ::std::invalid_argument,
+        ::std::string("data interface type mismatch: assumed ").append(type_name<T>).append(", actual ").append(tname));
     }
     return &instance(instance_id);
   }

@@ -13,7 +13,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -56,9 +56,7 @@ _CCCL_REQUIRES(__cccl_is_integer_v<_Tp> _CCCL_AND __cccl_is_integer_v<_Shift>)
 #if !_CCCL_TILE_COMPILATION() // error: asm statement is unsupported in tile code
       _CCCL_IF_NOT_CONSTEVAL_DEFAULT
       {
-#  if defined(_CCCL_BUILTIN_CONSTANT_P)
-        if (!_CCCL_BUILTIN_CONSTANT_P(__shift)) // inline ptx prevents constant folding
-#  endif // _CCCL_BUILTIN_CONSTANT_P
+        if (!_CCCL_IS_CONSTANT_P(__shift)) // inline ptx prevents constant folding
         {
           // On device, shl PTX instruction clamps the shift to width, however only 32-bit shifts are supported.
           NV_IF_TARGET(NV_IS_DEVICE, ({
@@ -78,9 +76,7 @@ _CCCL_REQUIRES(__cccl_is_integer_v<_Tp> _CCCL_AND __cccl_is_integer_v<_Shift>)
 #if !_CCCL_TILE_COMPILATION() // error: asm statement is unsupported in tile code
   _CCCL_IF_NOT_CONSTEVAL_DEFAULT
   {
-#  if defined(_CCCL_BUILTIN_CONSTANT_P)
-    if (!_CCCL_BUILTIN_CONSTANT_P(__shift)) // inline ptx prevents constant folding
-#  endif // _CCCL_BUILTIN_CONSTANT_P
+    if (!_CCCL_IS_CONSTANT_P(__shift)) // inline ptx prevents constant folding
     {
       // On device, shr PTX instruction clamps the shift to width, however only 32-bit shifts are supported.
       NV_IF_TARGET(NV_IS_DEVICE, ({

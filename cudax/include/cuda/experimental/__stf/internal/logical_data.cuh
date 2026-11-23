@@ -22,7 +22,7 @@
 #include <cuda/std/utility>
 #include <cuda/std/variant>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -30,15 +30,42 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cuda/std/__cstddef/types.h>
+#include <cuda/std/__exception/exception_macros.h>
+#include <cuda/std/__host_stdlib/algorithm>
+#include <cuda/std/__host_stdlib/cstdio>
+#include <cuda/std/__host_stdlib/memory>
+#include <cuda/std/cassert>
+
+#include <cuda/experimental/__stf/allocators/block_allocator.cuh>
+#include <cuda/experimental/__stf/internal/async_prereq.cuh>
 #include <cuda/experimental/__stf/internal/backend_ctx.cuh> // logical_data_untyped_impl has a backend_ctx_untyped
 #include <cuda/experimental/__stf/internal/constants.cuh>
 #include <cuda/experimental/__stf/internal/data_interface.cuh>
+#include <cuda/experimental/__stf/internal/exec_affinity.cuh>
+#include <cuda/experimental/__stf/internal/instance_id.cuh>
+#include <cuda/experimental/__stf/internal/msir.cuh>
+#include <cuda/experimental/__stf/internal/reduction_base.cuh>
+#include <cuda/experimental/__stf/internal/stf_places_into_stf_core.cuh>
+#include <cuda/experimental/__stf/internal/task.cuh>
+#include <cuda/experimental/__stf/internal/task_dep.cuh>
+#include <cuda/experimental/__stf/internal/void_interface.cuh>
 #include <cuda/experimental/__stf/utility/core.cuh>
+#include <cuda/experimental/__stf/utility/cuda_safe_call.cuh>
+#include <cuda/experimental/__stf/utility/exception_policy.cuh>
+#include <cuda/experimental/__stf/utility/hash.cuh>
 #include <cuda/experimental/__stf/utility/pretty_print.cuh>
+#include <cuda/experimental/__stf/utility/unittest.cuh>
 
+#include <atomic>
+#include <cstdlib>
 #include <map>
 #include <mutex>
-#include <optional>
+#include <stdexcept>
+#include <string>
+#include <tuple>
+#include <utility>
+#include <vector>
 
 namespace cuda::experimental::stf
 {
@@ -364,8 +391,7 @@ public:
       // Do not enable write-back on a logical data that was initialized from a shape, for example
       if (reference_instance_id == instance_id_t::invalid)
       {
-        fprintf(stderr, "Error: cannot enable write-back on a logical data with no reference instance.\n");
-        abort();
+        _CCCL_THROW(::std::logic_error, "cannot enable write-back on a logical data with no reference instance");
       }
     }
 
@@ -2295,12 +2321,34 @@ inline instance_id_t task::find_data_instance_id(const logical_data_untyped& d) 
     }
   }
 
-  // This task does not has d in its dependencies
-  fprintf(stderr, "FATAL: could not find this piece of data in the current task.\n");
-  abort();
-
-  return instance_id_t::invalid;
+  // This task does not have d among its dependencies
+  _CCCL_THROW(::std::invalid_argument,
+              ::std::string("logical data '").append(d.get_symbol()).append("' is not a dependency of this task"));
 }
+
+namespace reserved
+{
+//! @brief Check that every dependency of a task refers to an initialized logical data.
+//!
+//! A default-constructed handle is a programming error, reported as `std::invalid_argument`
+//! before the task touches anything.
+//!
+//! @param[in] deps The dependencies of the task
+inline void ensure_task_deps_initialized(const task_dep_vector_untyped& deps)
+{
+  size_t index = 0;
+  for (const auto& dep : deps)
+  {
+    if (!dep.has_data() || !dep.get_data().is_initialized())
+    {
+      _CCCL_THROW(
+        ::std::invalid_argument,
+        ::std::string("dependency number ").append(::std::to_string(index)).append(" is an uninitialized logical data"));
+    }
+    ++index;
+  }
+}
+} // namespace reserved
 
 // Don't document this because Doxygen doesn't know `decltype`
 #ifndef _CCCL_DOXYGEN_INVOKED // Do not document

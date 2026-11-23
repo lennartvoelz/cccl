@@ -13,7 +13,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -27,6 +27,7 @@
 #include <cuda/__utility/__basic_any/virtual_functions.h>
 #include <cuda/__utility/__basic_any/virtual_ptrs.h>
 #include <cuda/std/__exception/terminate.h> // IWYU pragma: keep
+#include <cuda/std/__type_traits/type_list_operations.h>
 #include <cuda/std/__utility/typeid.h>
 
 #include <cuda/std/__cccl/prologue.h>
@@ -44,8 +45,8 @@ struct _CCCL_DECLSPEC_EMPTY_BASES _CCCL_TYPE_VISIBILITY_DEFAULT __basic_vtable
     : __rtti_base
     , __virtual_fn<_Mbrs>...
 {
-  using interface _CCCL_NODEBUG    = _Interface;
-  static constexpr size_t __cbases = ::cuda::std::__type_list_size<__unique_interfaces<interface>>::value;
+  using interface_type _CCCL_NODEBUG = _Interface;
+  static constexpr size_t __cbases   = ::cuda::std::__type_list_size<__unique_interfaces<interface_type>>::value;
 
   template <class _VPtr, class _Tp, class... _OtherMembers, class... _Interfaces>
   _CCCL_HOST_DEVICE_API constexpr __basic_vtable(
@@ -58,11 +59,12 @@ struct _CCCL_DECLSPEC_EMPTY_BASES _CCCL_TYPE_VISIBILITY_DEFAULT __basic_vtable
   template <class _Tp, class _VPtr>
   _CCCL_HOST_DEVICE_API constexpr __basic_vtable(__tag<_Tp>, _VPtr __vptr) noexcept
       : __basic_vtable{__vptr,
-                       __overrides_for_t<interface, _Tp>(),
-                       __unique_interfaces<interface, ::cuda::std::__type_quote<__tag>>()}
+                       __overrides_for_t<interface_type, _Tp>(),
+                       __unique_interfaces<interface_type, ::cuda::std::__type_quote<__tag>>()}
   {}
 
-  [[nodiscard]] _CCCL_HOST_DEVICE_API auto __query_interface(interface) const noexcept -> __vptr_for<interface>
+  [[nodiscard]] _CCCL_HOST_DEVICE_API auto __query_interface(interface_type) const noexcept
+    -> __vptr_for<interface_type>
   {
     return this;
   }
@@ -72,7 +74,7 @@ struct _CCCL_DECLSPEC_EMPTY_BASES _CCCL_TYPE_VISIBILITY_DEFAULT __basic_vtable
     -> __vptr_for<__iset_<_Others...>>
   {
     using __remainder _CCCL_NODEBUG =
-      ::cuda::std::__type_list_size<::cuda::std::__type_find<__unique_interfaces<interface>, __iset_<_Others...>>>;
+      ::cuda::std::__type_list_size<::cuda::std::__type_find<__unique_interfaces<interface_type>, __iset_<_Others...>>>;
     constexpr size_t __index = __cbases - __remainder::value;
     if constexpr (__index < __cbases)
     {
@@ -91,7 +93,7 @@ struct _CCCL_DECLSPEC_EMPTY_BASES _CCCL_TYPE_VISIBILITY_DEFAULT __basic_vtable
   template <class _Other>
   [[nodiscard]] _CCCL_HOST_DEVICE_API auto __query_interface(_Other) const noexcept -> __vptr_for<_Other>
   {
-    constexpr size_t __index = __index_of_base<_Other, interface>::value;
+    constexpr size_t __index = __index_of_base<_Other, interface_type>::value;
     static_assert(__index < __cbases);
     return static_cast<__vptr_for<_Other>>(__vptr_map_[__index]);
   }

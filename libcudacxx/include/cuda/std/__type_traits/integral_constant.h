@@ -12,7 +12,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -40,11 +40,11 @@ struct _CCCL_TYPE_VISIBILITY_DEFAULT integral_constant
   }
 };
 
-using true_type  = integral_constant<bool, true>;
-using false_type = integral_constant<bool, false>;
-
 template <bool _Bp>
 using bool_constant = integral_constant<bool, _Bp>;
+
+using true_type  = bool_constant<true>;
+using false_type = bool_constant<false>;
 
 _CCCL_END_NAMESPACE_CUDA_STD
 

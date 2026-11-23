@@ -13,7 +13,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -39,7 +39,7 @@
 
 #include <cuda/std/__cccl/prologue.h>
 
-#if !defined(_CCCL_DOXYGEN_INVOKED)
+#ifndef _CCCL_DOXYGEN_INVOKED
 
 namespace cuda::experimental::coop
 {
@@ -72,7 +72,7 @@ class virtual_group;
 template <class _Hierarchy>
 class coalesced_group;
 
-template <class _Unit, class _Group>
+template <class _Unit, class _Group, class _MappingResult>
 class group_view;
 
 // mappings
@@ -80,23 +80,26 @@ class group_view;
 template <class _Fn>
 class binary_partition;
 
-template <::cuda::std::size_t _StaticUnitCount, bool _IsAlwaysExhaustive>
+template <::cuda::std::size_t _StaticUnitCount>
 class group_by;
 
-template <class _Tag, bool _IsAlwaysExhaustive>
+template <class _RangeView>
 class group_as;
 
 class identity_mapping;
+
+template <class _Fn>
+class labeled_partition;
 
 template <::cuda::std::size_t _StaticUnitCount = ::cuda::std::dynamic_extent>
 class take;
 
 // synchronizers
 
-template <class _Barrier, ::cuda::std::size_t _Np>
+template <class _RangeView>
 class barrier_synchronizer;
 
-template <class _Range>
+template <class _RangeView>
 class interwarp_synchronizer;
 
 class lane_synchronizer;
@@ -122,18 +125,21 @@ template <class _Tp>
 inline constexpr bool __is_group_mapping_v = false;
 template <class _Fn>
 inline constexpr bool __is_group_mapping_v<binary_partition<_Fn>> = true;
-template <::cuda::std::size_t _StaticUnitCount, bool _IsAlwaysExhaustive>
-inline constexpr bool __is_group_mapping_v<group_by<_StaticUnitCount, _IsAlwaysExhaustive>> = true;
-template <class _Tag, bool _IsAlwaysExhaustive>
-inline constexpr bool __is_group_mapping_v<group_as<_Tag, _IsAlwaysExhaustive>> = true;
+template <::cuda::std::size_t _StaticUnitCount>
+inline constexpr bool __is_group_mapping_v<group_by<_StaticUnitCount>> = true;
+template <class _RangeView>
+inline constexpr bool __is_group_mapping_v<group_as<_RangeView>> = true;
 template <>
 inline constexpr bool __is_group_mapping_v<identity_mapping> = true;
+template <class _Fn>
+inline constexpr bool __is_group_mapping_v<labeled_partition<_Fn>> = true;
 template <::cuda::std::size_t _StaticUnitCount>
 inline constexpr bool __is_group_mapping_v<take<_StaticUnitCount>> = true;
 
 // tags
 
 struct non_exhaustive_t;
+struct parent_group_t;
 
 inline constexpr ::cuda::std::uint32_t __invalid_count_or_rank = 0xffff'ffff;
 } // namespace cuda::experimental::coop
@@ -143,7 +149,7 @@ _CG_BEGIN_NAMESPACE
 
 class thread_group;
 class grid_group;
-#    if defined(_CG_HAS_CLUSTER_GROUP)
+#    ifdef _CG_HAS_CLUSTER_GROUP
 class cluster_group;
 #    endif // _CG_HAS_CLUSTER_GROUP
 class thread_block;

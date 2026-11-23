@@ -29,7 +29,7 @@
 #  endif // _CCCL_COMPILER(MSVC)
 #endif // CCCL_DISABLE_CUB_UMBRELLA_HEADER_WARNING
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -37,6 +37,7 @@
 #  pragma system_header
 #endif // no system header
 
+// IWYU pragma: begin_exports
 // Block
 #include <cub/block/block_adjacent_difference.cuh>
 #include <cub/block/block_discontinuity.cuh>
@@ -110,3 +111,4 @@
 #include <cub/util_runs_on.cuh>
 #include <cub/util_temporary_storage.cuh>
 #include <cub/util_type.cuh>
+// IWYU pragma: end_exports

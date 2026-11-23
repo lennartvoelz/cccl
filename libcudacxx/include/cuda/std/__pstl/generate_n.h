@@ -13,7 +13,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -51,6 +51,7 @@ generate_n([[maybe_unused]] const _Policy& __policy, _InputIterator __first, _Si
   static_assert(indirectly_writable<_InputIterator, invoke_result_t<_Generator>>,
                 "cuda::std::generate_n requires InputIterator to be indirectly writable with the return value of "
                 "Generator");
+  static_assert(__is_convertible_to_integral_v<_Size>, "_Size must be convertible to an integral");
 
   [[maybe_unused]] auto __dispatch =
     ::cuda::std::execution::__pstl_select_dispatch<::cuda::std::execution::__pstl_algorithm::__generate_n, _Policy>();

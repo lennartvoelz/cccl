@@ -12,7 +12,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -45,7 +45,7 @@ _CCCL_BEGIN_NAMESPACE_CUDA_STD
 template <class _Tp>
 [[nodiscard]] _CCCL_HOST_API _Tp __saturating_sub_impl_host(_Tp __x, _Tp __y) noexcept
 {
-#  if defined(_CCCL_BUILTIN_ELEMENTWISE_SUB_SAT)
+#  ifdef _CCCL_BUILTIN_ELEMENTWISE_SUB_SAT
 // Clang below 21 seems not to be working correctly for 8 and 16-bit types.
 #    if _CCCL_COMPILER(CLANG, <, 21)
   if constexpr (sizeof(_Tp) < sizeof(int32_t))
@@ -114,7 +114,7 @@ template <class _Tp>
 
 #if _CCCL_CUDA_COMPILATION()
 template <class _Tp>
-[[nodiscard]] _CCCL_DEVICE_API _Tp __saturating_sub_impl_device(_Tp __x, _Tp __y) noexcept
+[[nodiscard]] _CCCL_CONST _CCCL_DEVICE_API _Tp __saturating_sub_impl_device(_Tp __x, _Tp __y) noexcept
 {
   // Narrow branches differ only when target-specific inline PTX is available.
   // NOLINTBEGIN(bugprone-branch-clone)
@@ -144,7 +144,7 @@ template <class _Tp>
     else if constexpr (sizeof(_Tp) == sizeof(int32_t))
     {
       int32_t __result;
-      asm volatile("sub.sat.s32 %0, %1, %2;" : "=r"(__result) : "r"(__x), "r"(__y));
+      asm("sub.sat.s32 %0, %1, %2;" : "=r"(__result) : "r"(__x), "r"(__y));
       return __result;
     }
 #  endif // _CCCL_CUDACC_AT_LEAST(13, 0)

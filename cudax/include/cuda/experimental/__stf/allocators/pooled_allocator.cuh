@@ -19,7 +19,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -27,11 +27,25 @@
 #  pragma system_header
 #endif // no system header
 
-#include <cuda/experimental/__stf/allocators/block_allocator.cuh>
-#include <cuda/experimental/__stf/internal/backend_ctx.cuh>
-#include <cuda/experimental/__stf/utility/pretty_print.cuh>
+#include <cuda/std/__cstddef/types.h>
+#include <cuda/std/__host_stdlib/cstdio>
+#include <cuda/std/cassert>
 
-#include <optional>
+#include <cuda/experimental/__stf/allocators/block_allocator.cuh>
+#include <cuda/experimental/__stf/internal/async_prereq.cuh>
+#include <cuda/experimental/__stf/internal/backend_ctx.cuh>
+#include <cuda/experimental/__stf/internal/stf_places_into_stf_core.cuh>
+#include <cuda/experimental/__stf/utility/core.cuh>
+#include <cuda/experimental/__stf/utility/cuda_safe_call.cuh>
+#include <cuda/experimental/__stf/utility/hash.cuh>
+#include <cuda/experimental/__stf/utility/pretty_print.cuh>
+#include <cuda/experimental/__stf/utility/unittest.cuh>
+
+#include <cstdlib>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace cuda::experimental::stf
 {
@@ -301,7 +315,8 @@ public:
       }
     }
 
-    // Should not be reached
+    // Only STF's own bookkeeping releases pointers here, so this is an internal invariant. Kept as a
+    // report and abort rather than _CCCL_VERIFY so the offending pointer stays in the message.
     fprintf(stderr, "Error: pointer %p was released, but does not belong to a known pool.\n", ptr);
     abort();
   }

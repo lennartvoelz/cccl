@@ -13,7 +13,7 @@
 
 #include <cuda/std/detail/__config>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -36,10 +36,7 @@
 _CCCL_BEGIN_NAMESPACE_CUDA_STD
 
 _CCCL_EXEC_CHECK_DISABLE
-template <class _InputIter,
-          class _Distance,
-          class _IntegralDistance = decltype(::cuda::std::__convert_to_integral(::cuda::std::declval<_Distance>())),
-          class                   = enable_if_t<is_integral_v<_IntegralDistance>>>
+template <class _InputIter, class _Distance, enable_if_t<__is_convertible_to_integral_v<_Distance>, int> = 0>
 _CCCL_API constexpr void advance(_InputIter& __i, _Distance __orig_n)
 {
   using _Difference = typename iterator_traits<_InputIter>::difference_type;

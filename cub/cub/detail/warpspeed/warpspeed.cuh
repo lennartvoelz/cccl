@@ -4,7 +4,7 @@
 
 #include <cub/config.cuh>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -12,6 +12,7 @@
 #  pragma system_header
 #endif // no system header
 
+// IWYU pragma: begin_exports
 #include <cub/detail/warpspeed/allocators/smem_allocator.cuh>
 #include <cub/detail/warpspeed/constant_assert.cuh>
 #include <cub/detail/warpspeed/make_warp_uniform.cuh>
@@ -25,3 +26,4 @@
 #include <cub/detail/warpspeed/squad/squad_desc.cuh>
 #include <cub/detail/warpspeed/sync_handler.cuh>
 #include <cub/detail/warpspeed/values.cuh>
+// IWYU pragma: end_exports

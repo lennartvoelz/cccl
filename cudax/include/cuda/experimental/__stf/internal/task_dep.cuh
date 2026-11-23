@@ -15,7 +15,7 @@
 #include <cuda/std/utility>
 #include <cuda/std/variant>
 
-#if defined(_CCCL_IMPLICIT_SYSTEM_HEADER_GCC)
+#ifdef _CCCL_IMPLICIT_SYSTEM_HEADER_GCC
 #  pragma GCC system_header
 #elif defined(_CCCL_IMPLICIT_SYSTEM_HEADER_CLANG)
 #  pragma clang system_header
@@ -23,12 +23,23 @@
 #  pragma system_header
 #endif // no system header
 
+#include <cuda/std/__cstddef/types.h>
+#include <cuda/std/__host_stdlib/memory>
+#include <cuda/std/cassert>
+
+#include <cuda/experimental/__stf/internal/constants.cuh>
 #include <cuda/experimental/__stf/internal/instance_id.cuh>
 #include <cuda/experimental/__stf/internal/reduction_base.cuh>
+#include <cuda/experimental/__stf/internal/stf_places_into_stf_core.cuh>
 #include <cuda/experimental/__stf/internal/void_interface.cuh>
 #include <cuda/experimental/__stf/utility/core.cuh>
+#include <cuda/experimental/__stf/utility/unittest.cuh>
 
-#include <variant>
+#include <string>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace cuda::experimental::stf
 {
@@ -78,6 +89,17 @@ public:
   {}
 
   logical_data_untyped get_data() const;
+
+  //! @brief Whether this dependency refers to a logical data at all.
+  //!
+  //! A dependency built from a default-constructed handle packs an empty state, and
+  //! get_data() asserts on it.
+  //!
+  //! @return `true` if a logical data is attached, `false` for an empty state
+  bool has_data() const
+  {
+    return data != nullptr;
+  }
 
   instance_id_t get_instance_id() const
   {
